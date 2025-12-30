@@ -30,18 +30,18 @@ export function useWebStorage(storageType: 'localStorage' | 'sessionStorage' = '
             return { error: error.message };
           }
         })()`,
-        (result, isException) => {
+        (result: any, isException: any) => {
           if (isException) {
             reject(new Error(`获取 ${storageType} 失败: ${isException}`));
             return;
           }
 
-          if (result && result.error) {
+          if (result && typeof result === 'object' && 'error' in result) {
             reject(new Error(result.error));
             return;
           }
 
-          storageItems.value = result || [];
+          storageItems.value = (result as StorageItem[]) || [];
           resolve();
         }
       );
@@ -68,13 +68,13 @@ export function useWebStorage(storageType: 'localStorage' | 'sessionStorage' = '
             return { error: error.message };
           }
         })()`,
-        (result, isException) => {
+        (result: any, isException: any) => {
           if (isException) {
             reject(new Error(`添加 ${storageType} 项失败: ${isException}`));
             return;
           }
 
-          if (result && result.error) {
+          if (result && typeof result === 'object' && 'error' in result) {
             reject(new Error(result.error));
             return;
           }
@@ -104,13 +104,13 @@ export function useWebStorage(storageType: 'localStorage' | 'sessionStorage' = '
             return { error: error.message };
           }
         })()`,
-        (result, isException) => {
+        (result: any, isException: any) => {
           if (isException) {
             reject(new Error(`更新 ${storageType} 项失败: ${isException}`));
             return;
           }
 
-          if (result && result.error) {
+          if (result && typeof result === 'object' && 'error' in result) {
             reject(new Error(result.error));
             return;
           }
@@ -143,13 +143,13 @@ export function useWebStorage(storageType: 'localStorage' | 'sessionStorage' = '
             return { error: error.message };
           }
         })()`,
-        (result, isException) => {
+        (result: any, isException: any) => {
           if (isException) {
             reject(new Error(`删除 ${storageType} 项失败: ${isException}`));
             return;
           }
 
-          if (result && result.error) {
+          if (result && typeof result === 'object' && 'error' in result) {
             reject(new Error(result.error));
             return;
           }
@@ -176,13 +176,13 @@ export function useWebStorage(storageType: 'localStorage' | 'sessionStorage' = '
             return { error: error.message };
           }
         })()`,
-        (result, isException) => {
+        (result: any, isException: any) => {
           if (isException) {
             reject(new Error(`清空 ${storageType} 失败: ${isException}`));
             return;
           }
 
-          if (result && result.error) {
+          if (result && typeof result === 'object' && 'error' in result) {
             reject(new Error(result.error));
             return;
           }

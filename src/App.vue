@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref, computed, watch } from 'vue'
+import { onMounted, ref, computed, watch, shallowRef } from 'vue'
 import { useWebStorage } from './composables/useWebStorage'
 import { useSnapshot } from './composables/useSnapshot'
 import StorageItem from './components/StorageItem.vue'
@@ -10,10 +10,10 @@ import JsonViewer from './components/JsonViewer.vue'
 // Storage 类型：localStorage 或 sessionStorage
 const storageType = ref<'localStorage' | 'sessionStorage'>('localStorage')
 
-// 当前使用的 storage 实例
-let currentStorage = useWebStorage(storageType.value)
+// 当前使用的 storage 实例（使用 shallowRef 以便响应式更新）
+const currentStorage = shallowRef(useWebStorage(storageType.value))
 
-const storageItems = computed(() => currentStorage.storageItems.value)
+const storageItems = computed(() => currentStorage.value.storageItems.value)
 
 const {
   snapshots,
@@ -30,12 +30,43 @@ const currentEditValue = ref('')
 // 查看模式：'raw' 原始文本 | 'json' JSON 对象树
 const viewMode = ref<'raw' | 'json'>('json')
 
+// 获取选中项的数据
+const selectedItemData = computed(() => {
+  const item = storageItems.value.find((item: any) => item.key === selectedItem.value)
+  if (!item) return null
+  
+  // 尝试解析为 JSON
+  try {
+    return JSON.parse(item.value)
+  } catch {
+    return item.value
+  }
+})
+
+// 判断选中项是否为 JSON
+const isSelectedItemJson = computed(() => {
+  const item = storageItems.value.find((item: any) => item.key === selectedItem.value)
+  if (!item) return false
+  
+  try {
+    JSON.parse(item.value)
+    return true
+  } catch {
+    return false
+  }
+})
+
 // 监听 storage 类型变化，重新创建实例
-watch(storageType, (newType) => {
-  currentStorage = useWebStorage(newType)
+watch(storageType, async (newType: 'localStorage' | 'sessionStorage') => {
+  currentStorage.value = useWebStorage(newType)
   selectedItem.value = null
   isEditing.value = false
-  currentStorage.loadStorageItems()
+  viewMode.value = 'json' // 重置为对象树视图
+  try {
+    await currentStorage.value.loadStorageItems()
+  } catch (error: any) {
+    console.error('加载数据失败:', error)
+  }
 })
 
 // 切换 storage 类型
@@ -43,9 +74,19 @@ const switchStorageType = (type: 'localStorage' | 'sessionStorage') => {
   storageType.value = type
 }
 
+// 刷新数据
+const handleRefresh = async () => {
+  try {
+    await currentStorage.value.loadStorageItems()
+  } catch (error: any) {
+    console.error('刷新失败:', error)
+    alert('刷新失败: ' + error.message)
+  }
+}
+
 // 初始化时加载数据
 onMounted(() => {
-  currentStorage.loadStorageItems()
+  currentStorage.value.loadStorageItems()
 })
 
 // 处理编辑操作
@@ -56,19 +97,18 @@ const handleEdit = (key: string, value: string) => {
 }
 
 // 保存编辑
-const saveEdit = () => {
+const saveEdit = async () => {
   if (!currentEditKey.value) return
 
-  currentStorage.updateItem(currentEditKey.value, currentEditValue.value)
-    .then(() => {
-      isEditing.value = false
-      currentEditKey.value = ''
-      currentEditValue.value = ''
-    })
-    .catch((error: any) => {
-      console.error('保存失败:', error)
-      alert('保存失败: ' + error.message)
-    })
+  try {
+    await currentStorage.value.updateItem(currentEditKey.value, currentEditValue.value)
+    isEditing.value = false
+    currentEditKey.value = ''
+    currentEditValue.value = ''
+  } catch (error: any) {
+    console.error('保存失败:', error)
+    alert('保存失败: ' + error.message)
+  }
 }
 
 // 取消编辑
@@ -79,84 +119,88 @@ const cancelEdit = () => {
 }
 
 // 处理添加新项
-const handleAdd = () => {
+const handleAdd = async () => {
   const key = prompt('请输入新键名:')
   if (!key) return
 
   const value = prompt('请输入新值:')
   if (value === null) return
 
-  currentStorage.addItem(key, value)
-    .catch((error: any) => {
-      console.error('添加失败:', error)
-      alert('添加失败: ' + error.message)
-    })
+  try {
+    await currentStorage.value.addItem(key, value)
+  } catch (error: any) {
+    console.error('添加失败:', error)
+    alert('添加失败: ' + error.message)
+  }
 }
 
 // 处理删除操作
-const handleDelete = (key: string) => {
+const handleDelete = async (key: string) => {
   if (confirm(`确定要删除键 "${key}" 吗？此操作不可撤销。`)) {
-    currentStorage.deleteItem(key)
-      .catch((error: any) => {
-        console.error('删除失败:', error)
-        alert('删除失败: ' + error.message)
-      })
+    try {
+      await currentStorage.value.deleteItem(key)
+    } catch (error: any) {
+      console.error('删除失败:', error)
+      alert('删除失败: ' + error.message)
+    }
   }
 }
 
 // 处理清空操作
-const handleClear = () => {
+const handleClear = async () => {
   const storageTypeName = storageType.value === 'localStorage' ? 'localStorage' : 'sessionStorage'
   if (confirm(`确定要清空所有 ${storageTypeName} 数据吗？此操作不可撤销。`)) {
-    currentStorage.clearStorage()
-      .catch((error: any) => {
-        console.error('清空失败:', error)
-        alert('清空失败: ' + error.message)
-      })
+    try {
+      await currentStorage.value.clearStorage()
+    } catch (error: any) {
+      console.error('清空失败:', error)
+      alert('清空失败: ' + error.message)
+    }
   }
 }
 
 // 处理创建快照
-const handleCreateSnapshot = () => {
+const handleCreateSnapshot = async () => {
   const name = prompt('请输入快照名称:')
   if (!name) return
 
-  createSnapshot(name, storageItems.value)
-    .catch((error: any) => {
-      console.error('创建快照失败:', error)
-      alert('创建快照失败: ' + error.message)
-    })
+  try {
+    await createSnapshot(name, storageItems.value)
+  } catch (error: any) {
+    console.error('创建快照失败:', error)
+    alert('创建快照失败: ' + error.message)
+  }
 }
 
 // 处理恢复快照
-const handleRestoreSnapshot = (id: string) => {
+const handleRestoreSnapshot = async (id: string) => {
   const snapshot = snapshots.value.find((s: any) => s.id === id)
   if (!snapshot) return
 
   if (confirm(`确定要恢复快照 "${snapshot.name}" 吗？这将覆盖当前所有 ${storageType.value} 数据。`)) {
-    restoreSnapshot(id)
-      .then(() => {
-        // 恢复后重新加载数据
-        currentStorage.loadStorageItems()
-      })
-      .catch((error: any) => {
-        console.error('恢复快照失败:', error)
-        alert('恢复快照失败: ' + error.message)
-      })
+    try {
+      await restoreSnapshot(id)
+      // 恢复后重新加载数据
+      await currentStorage.value.loadStorageItems()
+    } catch (error: any) {
+      console.error('恢复快照失败:', error)
+      alert('恢复快照失败: ' + error.message)
+    }
   }
 }
 
 // 处理删除快照
-const handleDeleteSnapshot = (id: string) => {
+const handleDeleteSnapshot = async (id: string) => {
   const snapshot = snapshots.value.find((s: any) => s.id === id)
   if (!snapshot) return
 
   if (confirm(`确定要删除快照 "${snapshot.name}" 吗？`)) {
-    deleteSnapshot(id)
-      .catch((error: any) => {
-        console.error('删除快照失败:', error)
-        alert('删除快照失败: ' + error.message)
-      })
+    try {
+      await deleteSnapshot(id)
+    } catch (error: any) {
+      console.error('删除快照失败:', error)
+      alert('删除快照失败: ' + error.message)
+    }
   }
 }
 </script>
@@ -194,7 +238,7 @@ const handleDeleteSnapshot = (id: string) => {
 
         <!-- 工具栏按钮 -->
         <StorageToolbar
-          @refresh="loadStorageItems"
+          @refresh="handleRefresh"
           @add="handleAdd"
           @clear="handleClear"
           @create-snapshot="handleCreateSnapshot"
@@ -276,7 +320,7 @@ const handleDeleteSnapshot = (id: string) => {
 
             <!-- JSON 对象树视图 -->
             <div
-              v-if="viewMode === 'json' && isSelectedItemJson"
+              v-if="isSelectedItemJson && viewMode === 'json'"
               class="flex-1 bg-gray-50 p-4 rounded border border-gray-200 overflow-auto"
             >
               <JsonViewer :data="selectedItemData" />
@@ -337,141 +381,3 @@ const handleDeleteSnapshot = (id: string) => {
     </div>
   </div>
 </template>
-
-// 获取选中项的数据
-const selectedItemData = computed(() => {
-  const item = storageItems.value.find((item: any) => item.key === selectedItem.value)
-  if (!item) return null
-  
-  // 尝试解析为 JSON
-  try {
-    return JSON.parse(item.value)
-  } catch {
-    return item.value
-  }
-})
-
-// 判断选中项是否为 JSON
-const isSelectedItemJson = computed(() => {
-  const item = storageItems.value.find((item: any) => item.key === selectedItem.value)
-  if (!item) return false
-  
-  try {
-    JSON.parse(item.value)
-    return true
-  } catch {
-    return false
-  }
-})
-
-// 处理编辑操作
-const handleEdit = (key: string, value: string) => {
-  currentEditKey.value = key
-  currentEditValue.value = value
-  isEditing.value = true
-}
-
-// 保存编辑
-const saveEdit = () => {
-  if (!currentEditKey.value) return
-
-  currentStorage.updateItem(currentEditKey.value, currentEditValue.value)
-    .then(() => {
-      isEditing.value = false
-      currentEditKey.value = ''
-      currentEditValue.value = ''
-    })
-    .catch((error: any) => {
-      console.error('保存失败:', error)
-      alert('保存失败: ' + error.message)
-    })
-}
-
-// 取消编辑
-const cancelEdit = () => {
-  isEditing.value = false
-  currentEditKey.value = ''
-  currentEditValue.value = ''
-}
-
-// 处理添加新项
-const handleAdd = () => {
-  const key = prompt('请输入新键名:')
-  if (!key) return
-
-  const value = prompt('请输入新值:')
-  if (value === null) return
-
-  currentStorage.addItem(key, value)
-    .catch((error: any) => {
-      console.error('添加失败:', error)
-      alert('添加失败: ' + error.message)
-    })
-}
-
-// 处理删除操作
-const handleDelete = (key: string) => {
-  if (confirm(`确定要删除键 "${key}" 吗？此操作不可撤销。`)) {
-    currentStorage.deleteItem(key)
-      .catch((error: any) => {
-        console.error('删除失败:', error)
-        alert('删除失败: ' + error.message)
-      })
-  }
-}
-
-// 处理清空操作
-const handleClear = () => {
-  const storageTypeName = storageType.value === 'localStorage' ? 'localStorage' : 'sessionStorage'
-  if (confirm(`确定要清空所有 ${storageTypeName} 数据吗？此操作不可撤销。`)) {
-    currentStorage.clearStorage()
-      .catch((error: any) => {
-        console.error('清空失败:', error)
-        alert('清空失败: ' + error.message)
-      })
-  }
-}
-
-// 处理创建快照
-const handleCreateSnapshot = () => {
-  const name = prompt('请输入快照名称:')
-  if (!name) return
-
-  createSnapshot(name, storageItems.value)
-    .catch((error: any) => {
-      console.error('创建快照失败:', error)
-      alert('创建快照失败: ' + error.message)
-    })
-}
-
-// 处理恢复快照
-const handleRestoreSnapshot = (id: string) => {
-  const snapshot = snapshots.value.find((s: any) => s.id === id)
-  if (!snapshot) return
-
-  if (confirm(`确定要恢复快照 "${snapshot.name}" 吗？这将覆盖当前所有 ${storageType.value} 数据。`)) {
-    restoreSnapshot(id)
-      .then(() => {
-        // 恢复后重新加载数据
-        currentStorage.loadStorageItems()
-      })
-      .catch((error: any) => {
-        console.error('恢复快照失败:', error)
-        alert('恢复快照失败: ' + error.message)
-      })
-  }
-}
-
-// 处理删除快照
-const handleDeleteSnapshot = (id: string) => {
-  const snapshot = snapshots.value.find((s: any) => s.id === id)
-  if (!snapshot) return
-
-  if (confirm(`确定要删除快照 "${snapshot.name}" 吗？`)) {
-    deleteSnapshot(id)
-      .catch((error: any) => {
-        console.error('删除快照失败:', error)
-        alert('删除快照失败: ' + error.message)
-      })
-  }
-}
