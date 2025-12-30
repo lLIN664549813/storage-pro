@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { onMounted, ref, computed } from 'vue'
 import { useStorage } from './composables/useStorage'
 import { useSnapshot } from './composables/useSnapshot'
 import StorageItem from './components/StorageItem.vue'
 import StorageEditor from './components/StorageEditor.vue'
 import StorageToolbar from './components/StorageToolbar.vue'
+import JsonViewer from './components/JsonViewer.vue'
 
 const {
   storageItems,
@@ -26,6 +27,35 @@ const selectedItem = ref<string | null>(null)
 const isEditing = ref(false)
 const currentEditKey = ref('')
 const currentEditValue = ref('')
+
+// 查看模式：'raw' 原始文本 | 'json' JSON 对象树
+const viewMode = ref<'raw' | 'json'>('json')
+
+// 获取选中项的数据
+const selectedItemData = computed(() => {
+  const item = storageItems.value.find(item => item.key === selectedItem.value)
+  if (!item) return null
+  
+  // 尝试解析为 JSON
+  try {
+    return JSON.parse(item.value)
+  } catch {
+    return item.value
+  }
+})
+
+// 判断选中项是否为 JSON
+const isSelectedItemJson = computed(() => {
+  const item = storageItems.value.find(item => item.key === selectedItem.value)
+  if (!item) return false
+  
+  try {
+    JSON.parse(item.value)
+    return true
+  } catch {
+    return false
+  }
+})
 
 // 初始化时加载数据
 onMounted(() => {
@@ -187,10 +217,51 @@ const handleDeleteSnapshot = (id: string) => {
         </template>
 
         <template v-else-if="selectedItem">
-          <div class="p-4">
-            <h3 class="text-lg font-semibold mb-4">查看: {{ selectedItem }}</h3>
-            <div class="font-mono text-sm bg-gray-100 p-4 rounded overflow-auto max-h-96">
-              {{ storageItems.find(item => item.key === selectedItem)?.value }}
+          <div class="p-4 flex flex-col h-full">
+            <div class="flex items-center justify-between mb-4">
+              <h3 class="text-lg font-semibold">查看: {{ selectedItem }}</h3>
+              
+              <!-- 视图切换按钮（仅 JSON 数据显示） -->
+              <div v-if="isSelectedItemJson" class="flex items-center space-x-2">
+                <button
+                  @click="viewMode = 'json'"
+                  :class="[
+                    'px-3 py-1 text-xs rounded transition-colors',
+                    viewMode === 'json'
+                      ? 'bg-blue-500 text-white'
+                      : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                  ]"
+                >
+                  对象树
+                </button>
+                <button
+                  @click="viewMode = 'raw'"
+                  :class="[
+                    'px-3 py-1 text-xs rounded transition-colors',
+                    viewMode === 'raw'
+                      ? 'bg-blue-500 text-white'
+                      : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                  ]"
+                >
+                  原始文本
+                </button>
+              </div>
+            </div>
+
+            <!-- JSON 对象树视图 -->
+            <div
+              v-if="viewMode === 'json' && isSelectedItemJson"
+              class="flex-1 bg-gray-50 p-4 rounded border border-gray-200 overflow-auto"
+            >
+              <JsonViewer :data="selectedItemData" />
+            </div>
+
+            <!-- 原始文本视图 -->
+            <div
+              v-else
+              class="flex-1 font-mono text-sm bg-gray-100 p-4 rounded overflow-auto"
+            >
+              <pre class="whitespace-pre-wrap break-words">{{ storageItems.find(item => item.key === selectedItem)?.value }}</pre>
             </div>
           </div>
         </template>
