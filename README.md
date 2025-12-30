@@ -94,22 +94,21 @@ MIT License
 
 欢迎提交 Issue 和 Pull Request！
 
-### 贡献指南
+详细的贡献指南请查看 [CONTRIBUTING.md](CONTRIBUTING.md)
+
+### 快速开始
 
 1. Fork 本仓库
-2. 创建特性分支 (`git checkout -b feature/AmazingFeature`)
-3. 提交更改 (`git commit -m '新增：添加某个很棒的功能'`)
-4. 推送到分支 (`git push origin feature/AmazingFeature`)
-5. 开启 Pull Request
-
-### 开发规范
-
-请遵循项目的代码审查规则，详见 [CODE_REVIEW_REPORT.md](CODE_REVIEW_REPORT.md)
+2. 创建功能分支 (`git checkout -b feature/新功能`)
+3. 提交更改 (`git commit -m '新增：添加某个功能'`)
+4. 推送到分支 (`git push origin feature/新功能`)
+5. 创建 Pull Request 到 `develop` 分支
 
 ---
 
 ## 📚 相关文档
 
+- [贡献指南](CONTRIBUTING.md) - 如何参与项目开发
 - [部署指南](DEPLOYMENT_GUIDE.md) - 如何构建和安装扩展
 - [GitHub 推送指南](推送到GitHub操作指南.md) - 如何推送代码到 GitHub
 
