@@ -79,37 +79,39 @@ function cancel() {
 
 <template>
   <div class="flex flex-col h-full">
-    <div class="flex items-center justify-between mb-2">
+    <div class="flex items-center justify-between mb-3">
       <div class="flex items-center space-x-2">
         <button
           v-if="isJson"
           @click="toggleFormat"
-          class="px-2 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600"
+          class="px-3 py-1.5 text-sm bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
         >
-          格式化
+          格式化 JSON
         </button>
       </div>
-      <div v-if="errorMessage" class="text-red-500 text-xs">
+      <div v-if="errorMessage" class="text-red-500 text-sm font-medium">
         {{ errorMessage }}
       </div>
     </div>
 
     <textarea
       v-model="localValue"
-      class="flex-1 p-2 border border-gray-300 rounded font-mono text-sm resize-none"
+      class="flex-1 p-3 border border-gray-300 rounded font-mono text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
       placeholder="输入值..."
+      style="min-height: 400px;"
     ></textarea>
 
-    <div class="flex justify-end space-x-2 mt-2">
+    <div class="flex justify-end space-x-2 mt-3">
       <button
         @click="cancel"
-        class="px-3 py-1 text-sm border border-gray-300 rounded hover:bg-gray-50"
+        class="px-4 py-2 text-sm border border-gray-300 rounded hover:bg-gray-50 transition-colors"
       >
         取消
       </button>
       <button
         @click="save"
-        class="px-3 py-1 text-sm bg-blue-500 text-white rounded hover:bg-blue-600"
+        class="px-4 py-2 text-sm bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        :disabled="!!errorMessage"
       >
         保存
       </button>
