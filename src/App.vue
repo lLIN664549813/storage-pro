@@ -641,7 +641,7 @@ const handleImport = async (file: File, options: ImportOptions) => {
   border-radius: 6px;
   font-size: 14px;
   font-weight: 500;
-  background: transparent;
+  background: #F5F5F5;
   color: var(--text-main);
   border: none;
   cursor: pointer;
@@ -649,7 +649,7 @@ const handleImport = async (file: File, options: ImportOptions) => {
 }
 
 .tab-button:hover {
-  background: var(--hover);
+  background: #E8E8E8;
 }
 
 .tab-active {
