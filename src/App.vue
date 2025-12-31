@@ -4,11 +4,14 @@ import { useWebStorage } from './composables/useWebStorage'
 import { useSnapshot } from './composables/useSnapshot'
 import { useSearchFilter } from './composables/useSearchFilter'
 import { useExportImport } from './composables/useExportImport'
+import { useMonitor } from './composables/useMonitor'
 import StorageItem from './components/StorageItem.vue'
 import StorageEditor from './components/StorageEditor.vue'
 import JsonViewer from './components/JsonViewer.vue'
 import SearchHistoryDialog from './components/SearchHistoryDialog.vue'
 import ExportImportDialog from './components/ExportImportDialog.vue'
+import ChangeLogDialog from './components/ChangeLogDialog.vue'
+import StatsDashboard from './components/StatsDashboard.vue'
 import type { ExportOptions, ImportOptions } from './types/export'
 
 // Storage 类型：localStorage 或 sessionStorage
@@ -38,14 +41,32 @@ const {
   importFromJSON
 } = useExportImport()
 
+// 监控功能
+const {
+  monitorState,
+  changeLog,
+  formattedDuration,
+  startMonitoring,
+  stopMonitoring,
+  clearChangeLog,
+  isRecentlyChanged,
+  calculateStats,
+  exportChangeLog
+} = useMonitor()
+
 // 过滤后的数据
 const filteredItems = computed(() => filterItems(storageItems.value))
+
+// 计算统计信息
+const stats = computed(() => calculateStats(storageItems.value))
 
 // 对话框状态
 const showSearchHistory = ref(false)
 const showExportDialog = ref(false)
 const showImportDialog = ref(false)
 const showSnapshotDialog = ref(false)
+const showChangeLogDialog = ref(false)
+const showStatsDashboard = ref(false)
 const showMoreMenu = ref(false)
 
 // 本地搜索关键字（带防抖）
@@ -281,6 +302,21 @@ watch([searchOptions, filterOptions], () => {
   }
 }, { deep: true })
 
+// 处理监控切换
+const handleToggleMonitor = () => {
+  if (monitorState.value.isMonitoring) {
+    stopMonitoring()
+  } else {
+    startMonitoring()
+  }
+}
+
+// 处理导出变更日志
+const handleExportChangeLog = () => {
+  exportChangeLog()
+  showChangeLogDialog.value = false
+}
+
 // 处理导出
 const handleExport = async (options: ExportOptions) => {
   try {
@@ -382,6 +418,31 @@ const handleImport = async (file: File, options: ImportOptions) => {
 
         <!-- 次级操作按钮 -->
         <div class="toolbar-actions">
+          <!-- 监控按钮 -->
+          <button
+            @click="handleToggleMonitor"
+            :class="['icon-btn', monitorState.isMonitoring ? 'monitoring-active' : '']"
+            :title="monitorState.isMonitoring ? '停止监控' : '启动监控'"
+          >
+            {{ monitorState.isMonitoring ? '⏹️' : '▶️' }}
+          </button>
+          <!-- 变更日志按钮 -->
+          <button
+            @click="showChangeLogDialog = true"
+            class="icon-btn"
+            title="变更日志"
+          >
+            📋
+            <span v-if="changeLog.length > 0" class="badge">{{ changeLog.length }}</span>
+          </button>
+          <!-- 统计面板按钮 -->
+          <button
+            @click="showStatsDashboard = !showStatsDashboard"
+            class="icon-btn"
+            title="统计信息"
+          >
+            📊
+          </button>
           <button @click="showImportDialog = true" class="icon-btn" title="导入">
             📥
           </button>
@@ -411,6 +472,19 @@ const handleImport = async (file: File, options: ImportOptions) => {
       </div>
     </div>
 
+    <!-- 统计面板（可折叠） -->
+    <div v-if="showStatsDashboard" class="stats-panel">
+      <div class="stats-panel-header">
+        <h3 class="text-sm font-semibold">实时统计</h3>
+        <button @click="showStatsDashboard = false" class="text-gray-400 hover:text-gray-600">
+          ✕
+        </button>
+      </div>
+      <div class="stats-panel-content">
+        <StatsDashboard :stats="stats" />
+      </div>
+    </div>
+
     <!-- Content 区域 -->
     <div class="content-area">
       <!-- 左侧: Key 列表 -->
@@ -429,6 +503,7 @@ const handleImport = async (file: File, options: ImportOptions) => {
             :key="item.key"
             :item="item"
             :selected="selectedItem === item.key"
+            :highlight="isRecentlyChanged(item.key)"
             @select="selectedItem = item.key"
             @edit="handleEdit"
             @delete="handleDelete"
@@ -519,6 +594,11 @@ const handleImport = async (file: File, options: ImportOptions) => {
       >
         查看全部
       </button>
+      <!-- 监控状态 -->
+      <span v-if="monitorState.isMonitoring" class="footer-text ml-4">
+        <span class="monitoring-indicator"></span>
+        监控中 · {{ formattedDuration }} · {{ monitorState.changeCount }} 次变更
+      </span>
     </div>
 
     <!-- 快照对话框 -->
@@ -599,6 +679,14 @@ const handleImport = async (file: File, options: ImportOptions) => {
       @close="showImportDialog = false"
       @import="handleImport"
     />
+
+    <!-- 变更日志对话框 -->
+    <ChangeLogDialog
+      v-model="showChangeLogDialog"
+      :change-log="changeLog"
+      @clear="clearChangeLog"
+      @export="handleExportChangeLog"
+    />
   </div>
 </template>
 
@@ -642,7 +730,7 @@ const handleImport = async (file: File, options: ImportOptions) => {
   font-size: 14px;
   font-weight: 500;
   background: #F5F5F5;
-  color: var(--text-main);
+  color: #1F1F1F;
   border: none;
   cursor: pointer;
   transition: all 0.2s;
@@ -653,7 +741,7 @@ const handleImport = async (file: File, options: ImportOptions) => {
 }
 
 .tab-active {
-  background: var(--primary) !important;
+  background: #1677FF !important;
   color: #FFFFFF !important;
   font-weight: 600 !important;
 }
@@ -860,5 +948,63 @@ const handleImport = async (file: File, options: ImportOptions) => {
 
 .footer-link:hover {
   text-decoration: underline;
+}
+
+/* 监控相关样式 */
+.monitoring-active {
+  background: #FFF1F0 !important;
+  color: #FF4D4F !important;
+}
+
+.badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  background: #FF4D4F;
+  color: white;
+  font-size: 10px;
+  padding: 2px 4px;
+  border-radius: 8px;
+  min-width: 16px;
+  text-align: center;
+}
+
+.monitoring-indicator {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  background: #FF4D4F;
+  border-radius: 50%;
+  margin-right: 4px;
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+/* 统计面板 */
+.stats-panel {
+  background: #FFFFFF;
+  border-bottom: 1px solid var(--border);
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.stats-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: between;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.stats-panel-content {
+  padding: 16px;
 }
 </style>

@@ -5,6 +5,7 @@ import type { StorageItem as StorageItemType } from '../types/storage'
 interface Props {
   item: StorageItemType
   selected: boolean
+  highlight?: boolean // 新增：是否高亮显示（最近变更）
 }
 
 interface Emits {
@@ -13,7 +14,9 @@ interface Emits {
   (e: 'delete', key: string): void
 }
 
-const props = defineProps<Props>()
+const props = withDefaults(defineProps<Props>(), {
+  highlight: false
+})
 const emit = defineEmits<Emits>()
 
 // 计算值的显示文本，如果是JSON则格式化显示
@@ -48,13 +51,17 @@ const truncatedValue = computed(() => {
     class="p-3 rounded cursor-pointer transition-colors"
     :class="{
       'bg-blue-50 border border-blue-200': selected,
-      'bg-white border border-gray-200 hover:bg-gray-50': !selected
+      'bg-green-50 border border-green-300 animate-pulse-once': highlight && !selected,
+      'bg-white border border-gray-200 hover:bg-gray-50': !selected && !highlight
     }"
     @click="$emit('select', item.key)"
   >
     <div class="flex justify-between items-start">
       <div class="flex-1 min-w-0">
-        <div class="font-mono font-medium text-sm truncate">{{ item.key }}</div>
+        <div class="flex items-center gap-2">
+          <div class="font-mono font-medium text-sm truncate">{{ item.key }}</div>
+          <span v-if="highlight" class="text-xs text-green-600 font-semibold">最近变更</span>
+        </div>
         <div class="font-mono text-xs text-gray-600 mt-1 truncate">
           {{ truncatedValue }}
         </div>
@@ -83,3 +90,18 @@ const truncatedValue = computed(() => {
     </div>
   </div>
 </template>
+
+<style scoped>
+@keyframes pulse-once {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+
+.animate-pulse-once {
+  animation: pulse-once 1s ease-in-out 3;
+}
+</style>
