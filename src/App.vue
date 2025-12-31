@@ -53,7 +53,7 @@ const localSearchKeyword = ref('')
 let searchDebounceTimer: number | undefined
 
 // 监听本地搜索关键字变化
-watch(localSearchKeyword, (newValue) => {
+watch(localSearchKeyword, (newValue: string) => {
   clearTimeout(searchDebounceTimer)
   searchDebounceTimer = window.setTimeout(() => {
     searchOptions.value.keyword = newValue
@@ -101,7 +101,7 @@ const viewMode = ref<'raw' | 'json'>('json')
 
 // 获取选中项的数据
 const selectedItemData = computed(() => {
-  const item = storageItems.value.find((item: any) => item.key === selectedItem.value)
+  const item = storageItems.value.find((item) => item.key === selectedItem.value)
   if (!item) return null
   
   // 尝试解析为 JSON
@@ -114,7 +114,7 @@ const selectedItemData = computed(() => {
 
 // 判断选中项是否为 JSON
 const isSelectedItemJson = computed(() => {
-  const item = storageItems.value.find((item: any) => item.key === selectedItem.value)
+  const item = storageItems.value.find((item) => item.key === selectedItem.value)
   if (!item) return false
   
   try {
@@ -439,68 +439,6 @@ const handleImport = async (file: File, options: ImportOptions) => {
       <!-- 右侧: Value 详情 -->
       <div class="value-detail">
         <template v-if="isEditing">
-          <div class="h-full flex flex-col">
-            <h3 class="text-lg font-semibold mb-4">编辑: {{ currentEditKey }}</h3>
-            <div class="flex-1 min-h-0">
-              <StorageEditor
-                v-model="currentEditValue"
-                @save="saveEdit"
-                @cancel="cancelEdit"
-              />
-            </div>
-          </div>
-        </template>
-
-        <template v-else-if="selectedItem">
-          <div class="flex flex-col h-full">
-            <div class="flex items-center justify-between mb-4">
-              <h3 class="text-lg font-semibold">查看: {{ selectedItem }}</h3>
-              
-              <!-- 视图切换按钮（仅 JSON 数据显示） -->
-              <div v-if="isSelectedItemJson" class="flex items-center space-x-2">
-                <button
-                  @click="viewMode = 'json'"
-                  :class="[
-                    'px-3 py-1 text-xs rounded transition-colors',
-                    viewMode === 'json'
-                      ? 'bg-blue-500 text-white'
-                      : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                  ]"
-                >
-                  对象树
-                </button>
-                <button
-                  @click="viewMode = 'raw'"
-                  :class="[
-                    'px-3 py-1 text-xs rounded transition-colors',
-                    viewMode === 'raw'
-                      ? 'bg-blue-500 text-white'
-                      : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                  ]"
-                >
-                  原始文本
-                </button>
-              </div>
-            </div>
-
-            <!-- JSON 对象树视图 -->
-            <div
-              v-if="isSelectedItemJson && viewMode === 'json'"
-              class="flex-1 bg-gray-50 p-4 rounded border border-gray-200 overflow-auto"
-            >
-              <JsonViewer :data="selectedItemData" />
-            </div>
-
-            <!-- 原始文本视图 -->
-            <div
-              v-else
-              class="flex-1 font-mono text-sm bg-gray-100 p-4 rounded overflow-auto"
-            >
-              <pre class="whitespace-pre-wrap break-words">{{ storageItems.find(item => item.key === selectedItem)?.value }}</pre>
-            </div>
-          </div>
-        </template>
-        <template v-if="isEditing">
           <div class="p-4 h-full flex flex-col">
             <h3 class="text-lg font-semibold mb-4">编辑: {{ currentEditKey }}</h3>
             <div class="flex-1 min-h-0">
@@ -717,6 +655,7 @@ const handleImport = async (file: File, options: ImportOptions) => {
 .tab-active {
   background: var(--primary) !important;
   color: #FFFFFF !important;
+  font-weight: 600 !important;
 }
 
 .btn-primary {
