@@ -2,10 +2,16 @@
 import { onMounted, ref, computed, watch, shallowRef } from 'vue'
 import { useWebStorage } from './composables/useWebStorage'
 import { useSnapshot } from './composables/useSnapshot'
+import { useSearchFilter } from './composables/useSearchFilter'
+import { useExportImport } from './composables/useExportImport'
 import StorageItem from './components/StorageItem.vue'
 import StorageEditor from './components/StorageEditor.vue'
 import StorageToolbar from './components/StorageToolbar.vue'
 import JsonViewer from './components/JsonViewer.vue'
+import SearchBar from './components/SearchBar.vue'
+import SearchHistoryDialog from './components/SearchHistoryDialog.vue'
+import ExportImportDialog from './components/ExportImportDialog.vue'
+import type { ExportOptions, ImportOptions } from './types/export'
 
 // Storage 类型：localStorage 或 sessionStorage
 const storageType = ref<'localStorage' | 'sessionStorage'>('localStorage')
@@ -14,6 +20,33 @@ const storageType = ref<'localStorage' | 'sessionStorage'>('localStorage')
 const currentStorage = shallowRef(useWebStorage(storageType.value))
 
 const storageItems = computed(() => currentStorage.value.storageItems.value)
+
+// 搜索过滤功能
+const {
+  searchOptions,
+  filterOptions,
+  searchHistory,
+  filterItems,
+  saveSearchHistory,
+  replaySearchHistory,
+  clearSearchHistory,
+  resetSearch
+} = useSearchFilter()
+
+// 导入导出功能
+const {
+  exportData,
+  copyToClipboard,
+  importFromJSON
+} = useExportImport()
+
+// 过滤后的数据
+const filteredItems = computed(() => filterItems(storageItems.value))
+
+// 对话框状态
+const showSearchHistory = ref(false)
+const showExportDialog = ref(false)
+const showImportDialog = ref(false)
 
 const {
   snapshots,
@@ -203,6 +236,64 @@ const handleDeleteSnapshot = async (id: string) => {
     }
   }
 }
+
+// 处理搜索变化
+watch([searchOptions, filterOptions], () => {
+  // 保存搜索历史
+  if (searchOptions.value.keyword.trim()) {
+    saveSearchHistory(filteredItems.value.length)
+  }
+}, { deep: true })
+
+// 处理导出
+const handleExport = async (options: ExportOptions) => {
+  try {
+    const itemsToExport = options.selectedOnly && selectedItem.value
+      ? storageItems.value.filter(item => item.key === selectedItem.value)
+      : storageItems.value
+
+    await exportData(itemsToExport, storageType.value, options)
+  } catch (error: any) {
+    console.error('导出失败:', error)
+    alert('导出失败: ' + error.message)
+  }
+}
+
+// 处理复制到剪贴板
+const handleCopy = async () => {
+  try {
+    await copyToClipboard(storageItems.value)
+    alert('已复制到剪贴板')
+  } catch (error: any) {
+    console.error('复制失败:', error)
+    alert('复制失败: ' + error.message)
+  }
+}
+
+// 处理导入
+const handleImport = async (file: File, options: ImportOptions) => {
+  try {
+    const result = await importFromJSON(
+      file,
+      storageType.value,
+      options,
+      (progress) => {
+        console.log('导入进度:', progress)
+      }
+    )
+
+    // 显示结果
+    const message = `导入完成！\n成功: ${result.success}\n跳过: ${result.skipped}\n失败: ${result.failed}`
+    alert(message)
+
+    // 刷新数据
+    await currentStorage.value.loadStorageItems()
+    showImportDialog.value = false
+  } catch (error: any) {
+    console.error('导入失败:', error)
+    alert('导入失败: ' + error.message)
+  }
+}
 </script>
 
 <template>
@@ -237,14 +328,53 @@ const handleDeleteSnapshot = async (id: string) => {
         </div>
 
         <!-- 工具栏按钮 -->
-        <StorageToolbar
-          @refresh="handleRefresh"
-          @add="handleAdd"
-          @clear="handleClear"
-          @create-snapshot="handleCreateSnapshot"
-        />
+        <div class="flex items-center space-x-2">
+          <button
+            @click="showExportDialog = true"
+            class="px-3 py-2 text-sm bg-green-500 text-white rounded hover:bg-green-600 transition-colors"
+            title="导出数据"
+          >
+            📤 导出
+          </button>
+          <button
+            @click="showImportDialog = true"
+            class="px-3 py-2 text-sm bg-purple-500 text-white rounded hover:bg-purple-600 transition-colors"
+            title="导入数据"
+          >
+            📥 导入
+          </button>
+          <StorageToolbar
+            @refresh="handleRefresh"
+            @add="handleAdd"
+            @clear="handleClear"
+            @create-snapshot="handleCreateSnapshot"
+          />
+        </div>
       </div>
     </div>
+
+    <!-- 搜索栏 -->
+    <SearchBar
+      :keyword="searchOptions.keyword"
+      :search-in="searchOptions.searchIn"
+      :use-regex="searchOptions.useRegex"
+      :case-sensitive="searchOptions.caseSensitive"
+      :deep-search="searchOptions.deepSearch"
+      :types="filterOptions.types"
+      :min-size="filterOptions.minSize"
+      :max-size="filterOptions.maxSize"
+      :result-count="filteredItems.length"
+      @update:keyword="searchOptions.keyword = $event"
+      @update:search-in="searchOptions.searchIn = $event"
+      @update:use-regex="searchOptions.useRegex = $event"
+      @update:case-sensitive="searchOptions.caseSensitive = $event"
+      @update:deep-search="searchOptions.deepSearch = $event"
+      @update:types="filterOptions.types = $event"
+      @update:min-size="filterOptions.minSize = $event"
+      @update:max-size="filterOptions.maxSize = $event"
+      @clear="resetSearch"
+      @show-history="showSearchHistory = true"
+    />
 
     <!-- 主内容区 -->
     <div class="flex flex-1 overflow-hidden">
@@ -258,9 +388,13 @@ const handleDeleteSnapshot = async (id: string) => {
           当前页面没有 {{ storageType === 'localStorage' ? 'localStorage' : 'sessionStorage' }} 数据
         </div>
 
+        <div v-else-if="filteredItems.length === 0" class="text-gray-500 text-center py-8">
+          没有找到匹配的数据
+        </div>
+
         <div v-else class="space-y-2">
           <StorageItem
-            v-for="item in storageItems"
+            v-for="item in filteredItems"
             :key="item.key"
             :item="item"
             :selected="selectedItem === item.key"
@@ -379,5 +513,35 @@ const handleDeleteSnapshot = async (id: string) => {
         </div>
       </div>
     </div>
+
+    <!-- 搜索历史对话框 -->
+    <SearchHistoryDialog
+      :history="searchHistory"
+      :show="showSearchHistory"
+      @close="showSearchHistory = false"
+      @replay="replaySearchHistory"
+      @clear="clearSearchHistory"
+    />
+
+    <!-- 导出对话框 -->
+    <ExportImportDialog
+      :show="showExportDialog"
+      mode="export"
+      :items="storageItems"
+      :storage-type="storageType"
+      @close="showExportDialog = false"
+      @export="handleExport"
+      @copy="handleCopy"
+    />
+
+    <!-- 导入对话框 -->
+    <ExportImportDialog
+      :show="showImportDialog"
+      mode="import"
+      :items="storageItems"
+      :storage-type="storageType"
+      @close="showImportDialog = false"
+      @import="handleImport"
+    />
   </div>
 </template>
